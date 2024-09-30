@@ -1,38 +1,45 @@
-import multer from "multer";
+import multer from 'multer';
+import asyncHandler from 'express-async-handler';
+import sharp from 'sharp';
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    // This storage needs public/images folder in the root directory
-    // Else it will throw an error saying cannot find path public/images
-    cb(null, "./public/images");
-  },
-  // Store file in a .png/.jpeg/.jpg format instead of binary
-  filename: function (req, file, cb) {
-    let fileExtension = "";
-    if (file.originalname.split(".").length > 1) {
-      fileExtension = file.originalname.substring(
-        file.originalname.lastIndexOf(".")
-      );
-    }
-    const filenameWithoutExtension = file.originalname
-      .toLowerCase()
-      .split(" ")
-      .join("-")
-      ?.split(".")[0];
-    cb(
-      null,
-      filenameWithoutExtension +
-        Date.now() +
-        Math.ceil(Math.random() * 1e5) + // avoid rare name conflict
-        fileExtension
-    );
-  },
+// const storage = multer.diskStorage({
+//   destination: function (req, file, cb) {
+//     cb(null, './public');
+//   },
+//   filename: function (req, file, cb) {
+//     // const filename = `photo-${req.user._id}-${Date.now()}`;
+//     const filename = 'photo-monica-basma';
+//     cb(null, filename);
+//   }
+// });
+
+// export const upload = multer({ storage });
+
+const multerStorage = multer.memoryStorage();
+
+const multerFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith('image')) {
+    cb(null, true);
+  } else {
+    cb(new AppError('Not an image! Please upload only images.', 400), false);
+  }
+};
+
+const upload = multer({
+  storage: multerStorage,
+  fileFilter: multerFilter
 });
 
-// Middleware responsible to read form data and upload the File object to the mentioned path
-export const upload = multer({
-  storage,
-  limits: {
-    fileSize: 1 * 1000 * 1000,
-  },
+export const uploadPhoto = upload.fields([{ name: 'photo', maxCount: 1 }]);
+
+export const resizePhoto = asyncHandler(async (req, res, next) => {
+  if (!req.files.photo) return next();
+  req.body.photo = `user-${req.params.id}-${Date.now()}-photo.jpeg`;
+  await sharp(req.files.photo[0].buffer)
+    .resize(2000, 1333)
+    .toFormat('jpeg')
+    .jpeg({ quality: 90 })
+    .toFile(`public/temp/${req.body.photo}`);
+
+  next();
 });
